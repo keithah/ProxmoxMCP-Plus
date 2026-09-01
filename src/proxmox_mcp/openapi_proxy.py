@@ -7,6 +7,7 @@ import base64
 import binascii
 import hmac
 import logging
+
 import os
 import sys
 import time
@@ -23,13 +24,13 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from proxmox_mcp.observability import HttpRequestMetrics
 from proxmox_mcp.services.jobs import JobConflictError, JobNotFoundError
+from proxmox_mcp.security.sanitization import sanitize_string
 
 LOGGER = logging.getLogger(__name__)
 
 
 def _log_safe(value: object, max_length: int = 200) -> str:
-    text = str(value).replace("\r", "").replace("\n", "")
-    return text[:max_length]
+    return sanitize_string(value, max_length=max_length)
 
 
 def _parse_cors_allow_origins(value: Optional[str]) -> list[str]:
@@ -507,6 +508,7 @@ def main() -> None:
 
     job_store = None
     command_policy = None
+    config = None
     config_path = os.getenv("PROXMOX_MCP_CONFIG")
     if config_path:
         try:
@@ -516,6 +518,11 @@ def main() -> None:
             from proxmox_mcp.services import JobStore
 
             config = load_config(config_path)
+            if config.targets:
+                raise RuntimeError(
+                    "OpenAPI proxy does not support named multi-target configurations; "
+                    "use the native MCP server"
+                )
             command_policy = CommandPolicyGate(config.command_policy)
             proxmox = ProxmoxManager(
                 config.proxmox,
@@ -525,7 +532,9 @@ def main() -> None:
             ).get_api()
             job_store = JobStore(proxmox, sqlite_path=config.jobs.sqlite_path)
         except Exception as exc:  # noqa: BLE001
-            LOGGER.warning("JobStore initialization skipped in OpenAPI proxy: %s", exc)
+            if config is not None and config.targets:
+                raise
+            LOGGER.warning("JobStore initialization skipped in OpenAPI proxy: %s", _log_safe(exc))
 
     app = create_app(
         server_command=server_command,
