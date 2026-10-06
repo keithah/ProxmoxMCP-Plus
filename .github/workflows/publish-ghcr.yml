@@ -11,7 +11,7 @@ env:
 
 jobs:
   publish:
-    runs-on: ubuntu-latest
+    runs-on: ubicloud-standard-2
     outputs:
       image_ref: ${{ steps.image.outputs.ref }}
     permissions:
@@ -70,7 +70,7 @@ jobs:
   verify-arm64:
     name: Verify published ARM64 image
     needs: publish
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubicloud-standard-2-arm-ubuntu-2404
     permissions:
       contents: read
       packages: read
